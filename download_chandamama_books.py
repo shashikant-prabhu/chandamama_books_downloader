@@ -17,6 +17,9 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, parse_qs
 from collections import deque
 
+TIMEOUT = 120  # seconds
+EST_SPEED_BYTES = 1024 * 1024  # 1MB/s used for rough time estimate
+
 BASE_URL = "https://www.chandamama.in/story/"
 
 
@@ -37,7 +40,7 @@ def crawl_and_download(base_dir: str, year: str) -> None:
             continue
         visited.add(url)
         try:
-            resp = session.get(url, timeout=10)
+            resp = session.get(url, timeout=TIMEOUT)
         except Exception as exc:
             print(f"Failed to fetch {url}: {exc}")
             continue
@@ -68,8 +71,17 @@ def crawl_and_download(base_dir: str, year: str) -> None:
         filename = os.path.basename(pdf_path)
         pdf_url = urljoin(link, pdf_path)
         try:
-            r = session.get(pdf_url, stream=True, timeout=10)
+            r = session.get(pdf_url, stream=True, timeout=TIMEOUT)
             if r.status_code == 200:
+                size = int(r.headers.get('content-length', 0))
+                if size:
+                    est_seconds = size / EST_SPEED_BYTES
+                    print(
+                        f"Downloading {filename} (~{size/1024/1024:.2f} MB, "
+                        f"est. {est_seconds:.1f}s)"
+                    )
+                else:
+                    print(f"Downloading {filename} (size unknown)")
                 out_file = os.path.join(output_dir, filename)
                 with open(out_file, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=8192):
