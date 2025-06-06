@@ -15,6 +15,8 @@ import sys
 import logging
 from collections import deque
 from urllib.parse import parse_qs, urljoin, urlparse
+from typing import Iterable, List
+import argparse
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +29,8 @@ EST_SPEED_BYTES = 1024 * 1024  # 1MB/s used for rough time estimate
 BASE_URL = "https://www.chandamama.in/story/"
 
 
-def crawl_and_download(base_dir: str, year: str) -> None:
-    """Download all PDFs for *year* into *base_dir*."""
-    output_dir = os.path.join(base_dir, f"chandamama_books_{year}")
-    os.makedirs(output_dir, exist_ok=True)
+def collect_pdf_links(year: str) -> List[str]:
+    """Return a sorted list of Chandamama English PDF links for *year*."""
     session = requests.Session()
     visited = set()
     queue = deque([BASE_URL])
@@ -70,7 +70,16 @@ def crawl_and_download(base_dir: str, year: str) -> None:
             elif link not in visited:
                 queue.append(link)
 
-    for link in sorted(pdf_links):
+    return sorted(pdf_links)
+
+
+def download_pdfs(links: Iterable[str], base_dir: str, year: str) -> None:
+    """Download all *links* into *base_dir*."""
+    output_dir = os.path.join(base_dir, f"chandamama_books_{year}")
+    os.makedirs(output_dir, exist_ok=True)
+    session = requests.Session()
+
+    for link in links:
         parsed = urlparse(link)
         params = parse_qs(parsed.query)
         pdf_path = params.get('file', [None])[0]
@@ -81,7 +90,7 @@ def crawl_and_download(base_dir: str, year: str) -> None:
         pdf_url = urljoin(link, pdf_path)
         try:
             r = session.get(pdf_url, stream=True, timeout=TIMEOUT)
-            if r.status_code == 200:
+            if r.status_code == 200 and r.headers.get("content-type", "").lower().startswith("application/pdf"):
                 size = int(r.headers.get('content-length', 0))
                 if size:
                     est_seconds = size / EST_SPEED_BYTES
@@ -107,18 +116,43 @@ def crawl_and_download(base_dir: str, year: str) -> None:
             logger.error("Error downloading %s: %s", pdf_url, exc)
 
 
+def crawl_and_download(base_dir: str, year: str) -> None:
+    """Collect links for *year* and download them."""
+    links = collect_pdf_links(year)
+    if not links:
+        logger.warning("No PDFs found for %s", year)
+        return
+    download_pdfs(links, base_dir, year)
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    if len(argv) < 2:
-        print(
-            "Usage: python download_chandamama_books.py <year> <output-root>"
-        )
-        return 1
+
+    parser = argparse.ArgumentParser(
+        description="Download Chandamama PDFs or list their URLs"
+    )
+    parser.add_argument("year", help="Year of the issues to download")
+    parser.add_argument(
+        "base_dir",
+        help="Directory where PDFs should be stored (used for download mode)",
+    )
+    parser.add_argument(
+        "--list-only",
+        action="store_true",
+        help="Only list the PDF URLs instead of downloading",
+    )
+    args = parser.parse_args(argv)
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    year = argv[0]
-    base_dir = argv[1]
-    crawl_and_download(base_dir, year)
+
+    if args.list_only:
+        links = collect_pdf_links(args.year)
+        for link in links:
+            print(link)
+    else:
+        crawl_and_download(args.base_dir, args.year)
+
     return 0
 
 
