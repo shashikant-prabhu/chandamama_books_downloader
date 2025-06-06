@@ -11,15 +11,17 @@ environment):
    ```bash
    pip install requests beautifulsoup4
    ```
-2. Run the downloader and specify the directory where you would like the files
-   saved. On Windows you can point it at your `D:` drive:
+2. Run the downloader, providing the year you wish to download and the base
+   directory where the files should be stored. The script creates a folder
+   named `chandamama_books_<year>` inside the given directory. On Windows you
+   can point it at your `D:` drive:
    ```bash
-   python download_chandamama_books.py D:\\ChandamamaBooks
+   python download_chandamama_books.py 2010 D:\\
    ```
 
 The script crawls pages starting from `https://www.chandamama.in/story/` looking
-for links containing `englishview.php`. It downloads each linked PDF and stores
-it in a folder named after the corresponding year.
+for links containing `englishview.php`. Only files for the requested year are
+downloaded and placed in the `chandamama_books_<year>` directory.
 
 **Note:** This repository cannot verify the availability or legality of the
 content. Ensure that downloading these files complies with the website's terms

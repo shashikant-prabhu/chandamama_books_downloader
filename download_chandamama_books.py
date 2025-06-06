@@ -1,7 +1,10 @@
 """
 Crawls chandamama.in starting from the story page, collects links
-containing englishview.php (which serve PDF files), and downloads
-them. PDFs are stored in <output>/YEAR/filename.pdf.
+containing ``englishview.php`` (which serve PDF files), and downloads
+them.
+
+Provide a year to limit which files are fetched. Downloads are placed
+in ``<output_root>/chandamama_books_<year>/``.
 
 This script respects a simple breadth-first crawl limited to the
 chandamama.in domain.
@@ -17,7 +20,9 @@ from collections import deque
 BASE_URL = "https://www.chandamama.in/story/"
 
 
-def crawl_and_download(output_dir: str):
+def crawl_and_download(base_dir: str, year: str) -> None:
+    """Download all PDFs for *year* into *base_dir*."""
+    output_dir = os.path.join(base_dir, f"chandamama_books_{year}")
     os.makedirs(output_dir, exist_ok=True)
     session = requests.Session()
     visited = set()
@@ -46,7 +51,10 @@ def crawl_and_download(output_dir: str):
             if parsed.netloc != base_netloc:
                 continue
             if 'englishview.php' in parsed.path and 'file=' in parsed.query:
-                pdf_links.add(link)
+                params = parse_qs(parsed.query)
+                link_year = params.get('year', [None])[0]
+                if link_year == year:
+                    pdf_links.add(link)
             elif link not in visited:
                 queue.append(link)
 
@@ -54,17 +62,15 @@ def crawl_and_download(output_dir: str):
         parsed = urlparse(link)
         params = parse_qs(parsed.query)
         pdf_path = params.get('file', [None])[0]
-        year = params.get('year', [None])[0]
-        if not pdf_path or not year:
+        link_year = params.get('year', [None])[0]
+        if not pdf_path or link_year != year:
             continue
         filename = os.path.basename(pdf_path)
-        year_dir = os.path.join(output_dir, year)
-        os.makedirs(year_dir, exist_ok=True)
         pdf_url = urljoin(link, pdf_path)
         try:
             r = session.get(pdf_url, stream=True, timeout=10)
             if r.status_code == 200:
-                out_file = os.path.join(year_dir, filename)
+                out_file = os.path.join(output_dir, filename)
                 with open(out_file, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         if chunk:
@@ -79,11 +85,14 @@ def crawl_and_download(output_dir: str):
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    if len(argv) < 1:
-        print("Usage: python download_chandamama_books.py <output-directory>")
+    if len(argv) < 2:
+        print(
+            "Usage: python download_chandamama_books.py <year> <output-root>"
+        )
         return 1
-    output_dir = argv[0]
-    crawl_and_download(output_dir)
+    year = argv[0]
+    base_dir = argv[1]
+    crawl_and_download(base_dir, year)
     return 0
 
 
