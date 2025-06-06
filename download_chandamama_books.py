@@ -12,10 +12,14 @@ chandamama.in domain.
 
 import os
 import sys
+import logging
+from collections import deque
+from urllib.parse import parse_qs, urljoin, urlparse
+
+logger = logging.getLogger(__name__)
+
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse, parse_qs
-from collections import deque
 
 TIMEOUT = 120  # seconds
 EST_SPEED_BYTES = 1024 * 1024  # 1MB/s used for rough time estimate
@@ -42,10 +46,10 @@ def crawl_and_download(base_dir: str, year: str) -> None:
         try:
             resp = session.get(url, timeout=TIMEOUT)
         except Exception as exc:
-            print(f"Failed to fetch {url}: {exc}")
+            logger.error("Failed to fetch %s: %s", url, exc)
             continue
         if resp.status_code != 200:
-            print(f"Skip {url}: status {resp.status_code}")
+            logger.warning("Skip %s: status %s", url, resp.status_code)
             continue
         soup = BeautifulSoup(resp.text, 'html.parser')
         for a in soup.find_all('a', href=True):
@@ -53,10 +57,15 @@ def crawl_and_download(base_dir: str, year: str) -> None:
             parsed = urlparse(link)
             if parsed.netloc != base_netloc:
                 continue
+            if '/hindi/' in parsed.path:
+                continue
+            if '/story/' in parsed.path and f'/story/{year}/' not in parsed.path:
+                continue
             if 'englishview.php' in parsed.path and 'file=' in parsed.query:
                 params = parse_qs(parsed.query)
                 link_year = params.get('year', [None])[0]
-                if link_year == year:
+                pdf_path = params.get('file', [""])[0]
+                if link_year == year and '/english/' in pdf_path:
                     pdf_links.add(link)
             elif link not in visited:
                 queue.append(link)
@@ -76,22 +85,26 @@ def crawl_and_download(base_dir: str, year: str) -> None:
                 size = int(r.headers.get('content-length', 0))
                 if size:
                     est_seconds = size / EST_SPEED_BYTES
-                    print(
-                        f"Downloading {filename} (~{size/1024/1024:.2f} MB, "
-                        f"est. {est_seconds:.1f}s)"
+                    logger.info(
+                        "Downloading %s (~%.2f MB, est. %.1fs)",
+                        filename,
+                        size / 1024 / 1024,
+                        est_seconds,
                     )
                 else:
-                    print(f"Downloading {filename} (size unknown)")
+                    logger.info("Downloading %s (size unknown)", filename)
                 out_file = os.path.join(output_dir, filename)
                 with open(out_file, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
-                print(f"Downloaded {out_file}")
+                logger.info("Downloaded %s", out_file)
             else:
-                print(f"Failed to download {pdf_url}: status {r.status_code}")
+                logger.warning(
+                    "Failed to download %s: status %s", pdf_url, r.status_code
+                )
         except Exception as exc:
-            print(f"Error downloading {pdf_url}: {exc}")
+            logger.error("Error downloading %s: %s", pdf_url, exc)
 
 
 def main(argv=None):
@@ -102,6 +115,7 @@ def main(argv=None):
             "Usage: python download_chandamama_books.py <year> <output-root>"
         )
         return 1
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     year = argv[0]
     base_dir = argv[1]
     crawl_and_download(base_dir, year)

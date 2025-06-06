@@ -23,7 +23,8 @@ The script crawls pages starting from `https://www.chandamama.in/story/` looking
 for links containing `englishview.php`. Only English PDF files for the
 requested year are downloaded and placed in the
 `chandamama_books_<year>` directory. Each request uses a two minute timeout and
-the script prints progress with an estimated download time for each file.
+progress is logged to the console with an estimated download time for each
+file.
 
 **Note:** This repository cannot verify the availability or legality of the
 content. Ensure that downloading these files complies with the website's terms
