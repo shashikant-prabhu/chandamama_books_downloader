@@ -19,12 +19,21 @@ environment):
    python download_chandamama_books.py 2010 D:\\
    ```
 
+   If you simply want to list the download URLs without fetching the files,
+   add the `--list-only` flag:
+   ```bash
+   python download_chandamama_books.py 2010 D:\\ --list-only
+   ```
+
 The script crawls pages starting from `https://www.chandamama.in/story/` looking
 for links containing `englishview.php`. Only English PDF files for the
 requested year are downloaded and placed in the
 `chandamama_books_<year>` directory. Each request uses a two minute timeout and
 progress is logged to the console with an estimated download time for each
 file.
+
+For safety the downloader verifies that each file advertises a PDF
+`Content-Type` header before saving it.
 
 **Note:** This repository cannot verify the availability or legality of the
 content. Ensure that downloading these files complies with the website's terms
